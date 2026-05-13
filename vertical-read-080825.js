@@ -1124,14 +1124,14 @@
         doc.body.appendChild(scrollUI);
 
         const SCROLL_FIELD_MAP = {
+          scrollRight:      { prop: 'checked', event: 'change',  key: 'right',       parser: null },
+          scrollLeft:       { prop: 'checked', event: 'change', key: 'left', parser: null },
+          scrollS:          { prop: 'value',   event: 'input',   key: 'shadow',      parser: Number },
+          scrollO:          { prop: 'value',   event: 'input',   key: 'opacity',     parser: parseFloat },
           scrollB:          { prop: 'checked', event: 'change',  key: 'border',      parser: null },
           scrollC:          { prop: 'checked', event: 'change',  key: 'colorIn',     parser: null },
-          scrollS:          { prop: 'value',   event: 'input',   key: 'shadow',      parser: Number },
-          scrollRight:      { prop: 'checked', event: 'change',  key: 'right',       parser: null },
-          scrollLeft:       { prop: 'checked', event: 'change',  key: 'left',        parser: null },
           scrollX:          { prop: 'value',   event: 'input',   key: 'position',    parser: Number },
           scrollW:          { prop: 'value',   event: 'input',   key: 'width',       parser: Number },
-          scrollO:          { prop: 'value',   event: 'input',   key: 'opacity',     parser: parseFloat },
           scrollSpeedScale: { prop: 'value',   event: 'input',   key: 'speedScale',  parser: parseFloat },
           scrollHide:       { prop: 'checked', event: 'change',  key: 'hideBall',    parser: null },
         };
@@ -2257,7 +2257,7 @@
                         const rule = `.pcr-app { left: ${left}px !important; top: ${top}px !important; right: auto !important; bottom: auto !important; position: fixed !important; }`;
                         globalDragRuleIndex = sheet.insertRule(rule, sheet.cssRules.length);
                       }
-
+                      // ドラッグイベント
                       dragBtn.addEventListener('mousedown', e => {
                         isDragging = true;
                         const rect = app.getBoundingClientRect();
@@ -2267,10 +2267,12 @@
                         e.preventDefault();
                         e.stopPropagation();
                       });
+
                       doc.addEventListener('mousemove', e => {
                         if (!isDragging) return;
                         applyDragCss(e.clientX - offsetX, e.clientY - offsetY);
                       });
+
                       doc.addEventListener('mouseup', () => {
                         if (isDragging) {
                           isDragging = false;
@@ -2289,11 +2291,13 @@
                         e.preventDefault();
                         e.stopPropagation();
                       });
+
                       doc.addEventListener('touchmove', e => {
                         if (!isDragging || e.touches.length !== 1) return;
                         const touch = e.touches[0];
                         applyDragCss(touch.clientX - offsetX, touch.clientY - offsetY);
                       }, { passive: false });
+
                       doc.addEventListener('touchend', () => {
                         if (isDragging) {
                           isDragging = false;
@@ -3233,7 +3237,7 @@
             title.textContent = `☆ ${name} に保存しますか?`;
             title.id = 'title';
             title.style.cssText = `
-              margin: 0 0 5px 0;
+              margin: 0 0 5px;
               font-size: 16px;
               font-weight: bold;
             `;
@@ -3533,14 +3537,14 @@
           ]),
 
           scrollSettings: new Set([
-            'border',
-            'colorIn',
-            'shadow',
             'right',
             'left',
+            'shadow',
+            'opacity',
+            'border',
+            'colorIn',
             'position',
             'width',
-            'opacity',
             'speedScale',
             'hideBall'
           ]),
@@ -3630,6 +3634,15 @@
           return validateObject(obj, 'root');
         }
 
+        // JSON文字列を正規化
+        function normalizeJSONString(text) {
+          return text
+            .replace(/\u00A0/g, ' ')              // NBSP → 半角スペース
+            .replace(/[\u200B-\u200D\uFEFF]/g, '') // ゼロ幅文字除去
+            .replace(/\r\n/g, '\n')              // 改行コード統一
+            .replace(/\r/g, '\n');
+        }
+
         // JSONの検証ロジックを共通化
         function validateAndParseJSON(jsonText, allowEmpty = false) {
           if (!jsonText) {
@@ -3638,6 +3651,8 @@
             }
             return { error: 'JSONデータを入力してください' };
           }
+
+          jsonText = normalizeJSONString(jsonText);
 
           let parsedData;
           try {
@@ -3918,7 +3933,6 @@
         }
 
         // --- 保存済みのすべてのJSONを表示するボタンのイベント登録 ---
-        // --- 保存済みのすべてのJSONを表示するボタンのイベント登録 ---
         doc.getElementById('viewAllJsonBtn').onclick = () => {
 
           // 保存済みスタイルをキー順にソート
@@ -3944,6 +3958,7 @@
                 box-sizing: border-box;
                 font-family: monospace;
                 border: 1px solid #ccc;
+                border-radius: 4px;
                 padding: 12px;
                 resize: none;
                 white-space: pre-wrap;
@@ -4039,25 +4054,31 @@
               prettyLabel.classList.toggle('disabled', isAllEditing);
 
               if (!isAllEditing) {
-                try {
-                  currentJson = JSON.parse(jsonDisplay.value);
-                  // 編集終了時に短縮できるなら「短縮する」に切り替え
-                  const currentText = JSON.stringify(currentJson);
-                  const compressed = extractBase(currentJson);
-                  const compressedText = JSON.stringify(compressed);
-                  compressJsonBtn.textContent = compressedText.length < currentText.length ? '短縮する' : '展開する';
-                } catch (e) {
-                  jsonWin.alert(`JSONの解析に失敗しました:\n${e.message}`);
+                const result = validateAndParseJSON(jsonDisplay.value);
+                if (result.error) {
+                  jsonWin.alert(result.error);
                   isAllEditing = true;
                   allJsonEditBtn.textContent = '編集中…';
-                  jsonDisplay.readOnly = false;
-                  jsonDisplay.classList.add('editing');
+                  jsonDisplay.contentEditable = 'true';
                   [prettyCheckbox, jsonWinCopyBtn, compressJsonBtn].forEach(el => {
                     el.disabled = true;
                     el.classList.add('disabled');
                   });
                   prettyLabel.classList.add('disabled');
+                  return;
                 }
+
+                currentJson = result.data;
+
+                // 編集終了時に短縮できるなら「短縮する」に切り替え
+                const currentText = JSON.stringify(currentJson);
+                const compressed = extractBase(currentJson);
+                const compressedText = JSON.stringify(compressed);
+
+                compressJsonBtn.textContent =
+                  compressedText.length < currentText.length
+                    ? '短縮する'
+                    : '展開する';
               }
             });
 
