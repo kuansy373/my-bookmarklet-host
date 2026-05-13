@@ -4,6 +4,7 @@
   function run() {
 
     let text = '';
+    const textParts = [];
 
     function escapeHTML(str) {
       return str.replace(/[&<>"']/g, function (m) {
@@ -76,8 +77,10 @@
       '#novelBody'
     )
     .forEach(node => {
-      text += extractWithRubyTags(node);
+      textParts.push(extractWithRubyTags(node));
     });
+
+    text = textParts.join('');
 
     // カクヨムの傍点
     text = text.replace(/<em class="emphasisDots">([\s\S]*?)<\/em>/gi, (_, content) => {
@@ -388,18 +391,15 @@
     // テキスト全体から可視文字位置と対応するHTML位置のマップを作成
     function buildPositionMap(html) {
       const map = [];
+
       let htmlPos = 0;
       let visiblePos = 0;
       let rubyDepth = 0;
-
-      // rt / rp の中かどうか
-      const skipStack = [];
-      let skipVisible = false;
+      let skipDepth = 0;
 
       while (htmlPos < html.length) {
         const ch = html[htmlPos];
 
-        // タグ開始
         if (ch === '<') {
           const tag = parseTag(html, htmlPos);
           if (!tag) break;
@@ -413,11 +413,9 @@
           // rt / rp は可視文字として数えない
           if (tag.name === 'rt' || tag.name === 'rp') {
             if (!tag.isClosing) {
-              skipStack.push(tag.name);
-              skipVisible = true;
+              skipDepth++;
             } else {
-              skipStack.pop();
-              skipVisible = skipStack.length > 0;
+              skipDepth = Math.max(0, skipDepth - 1);
             }
           }
 
@@ -425,8 +423,7 @@
           continue;
         }
 
-        // テキストノード文字
-        if (!skipVisible) {
+        if (skipDepth === 0) {
           map.push({ visiblePos, htmlPos, rubyDepth });
           visiblePos++;
         }
@@ -435,6 +432,7 @@
       }
 
       map.push({ visiblePos, htmlPos: html.length, rubyDepth });
+
       return map;
     }
 
@@ -649,7 +647,11 @@
       const url = URL.createObjectURL(blob);
 
       const win = window.open(url, '_blank');
-      if (!win) return;
+
+      if (!win) {
+        alert('ポップアップがブロックされました');
+        return;
+      }
 
       win.addEventListener('load', () => {
         try { URL.revokeObjectURL(url); } catch (e) {}
@@ -999,18 +1001,32 @@
         // === スクロール処理 ===
         const scroller = doc.scrollingElement || doc.documentElement;
         let scrollSpeed = 0;
+        let rafId = null;
         let lastTimestamp = null;
 
         function forceScroll(timestamp) {
           if (lastTimestamp === null) {
             lastTimestamp = timestamp;
           }
-          if (scrollSpeed !== 0) {
-            const elapsed = timestamp - lastTimestamp;
-            scroller.scrollTop += (scrollSpeed * elapsed) / 1000;
-          }
+
+          const elapsed = timestamp - lastTimestamp;
+          scroller.scrollTop += (scrollSpeed * elapsed) / 1000;
+
           lastTimestamp = timestamp;
-          win.requestAnimationFrame(forceScroll);
+
+          if (scrollSpeed === 0) {
+            rafId = null;
+            lastTimestamp = null;
+            return;
+          }
+
+          rafId = requestAnimationFrame(forceScroll);
+        }
+
+        function startScrollLoop() {
+          if (rafId === null && scrollSpeed !== 0) {
+            rafId = requestAnimationFrame(forceScroll);
+          }
         }
 
         // 両方のスライダーの値を同期
@@ -1024,12 +1040,11 @@
           if (scrollSliderLeft !== e.target) {
             scrollSliderLeft.value = val;
           }
+          startScrollLoop();
         }
         [scrollSliderRight, scrollSliderLeft].forEach((slider) => {
           slider.addEventListener("input", onSliderInput);
         });
-
-        win.requestAnimationFrame(forceScroll);
 
         // タブまたはウィンドウの非アクティブでスライダー値リセット
         doc.addEventListener("visibilitychange", () => {
@@ -1296,9 +1311,9 @@
           </svg>
         `;
         Object.assign(sUIOpenBtn.style, baseOpenBtnStyle, {
-          padding: '0px 5px 5px 0px',
-          top: '10px',
-          left: '18px',
+          padding: '5px 8px 5px 8px',
+          top: '5px',
+          left: '10px',
           zIndex: '10006',
         });
         doc.body.appendChild(sUIOpenBtn);
@@ -1636,9 +1651,9 @@
           </svg>
         `;
         Object.assign(fUIOpenBtn.style, baseOpenBtnStyle, {
-          padding: '0px 0px 5px 5px',
-          top: '10px',
-          right: '18px',
+          padding: '5px 8px 5px 8px',
+          top: '5px',
+          right: '10px',
           zIndex: '10006'
         });
         doc.body.appendChild(fUIOpenBtn);
@@ -1698,20 +1713,6 @@
             crossorigin: 'anonymous'
           })
         ]).then(() => {
-          // 既存イベントを破棄
-          if (win.__pickrAbortController) {
-            win.__pickrAbortController.abort();
-          }
-
-          // 新しい controller
-          const abortController = new AbortController();
-          win.__pickrAbortController = abortController;
-
-          // addEventListener 用 signal
-          const listenerOptions = {
-            signal: abortController.signal
-          };
-
           const style = doc.createElement('style');
           const PickrClass = win.Pickr;
           style.textContent = `
@@ -2265,7 +2266,7 @@
                         applyDragCss(rect.left, rect.top);
                         e.preventDefault();
                         e.stopPropagation();
-                      }, listenerOptions);
+                      });
                       doc.addEventListener('mousemove', e => {
                         if (!isDragging) return;
                         applyDragCss(e.clientX - offsetX, e.clientY - offsetY);
@@ -2274,7 +2275,7 @@
                         if (isDragging) {
                           isDragging = false;
                         }
-                      }, listenerOptions);
+                      });
 
                       // タッチ対応
                       dragBtn.addEventListener('touchstart', e => {
@@ -2292,15 +2293,12 @@
                         if (!isDragging || e.touches.length !== 1) return;
                         const touch = e.touches[0];
                         applyDragCss(touch.clientX - offsetX, touch.clientY - offsetY);
-                      }, {
-                        passive: false,
-                        signal: abortController.signal
-                      });
+                      }, { passive: false });
                       doc.addEventListener('touchend', () => {
                         if (isDragging) {
                           isDragging = false;
                         }
-                      }, listenerOptions);
+                      });
                     }
                   }
 
@@ -2540,9 +2538,9 @@
             `;
 
             Object.assign(pUIOpenBtn.style, baseOpenBtnStyle, {
-              padding: '5px 0px 5px 5px',
+              padding: '5px 8px 5px 8px',
               top: '75px',
-              right: '18px',
+              right: '10px',
               zIndex: '20000'
             });
 
@@ -3001,9 +2999,9 @@
           </svg>
         `;
         Object.assign(oUIOpenBtn.style, baseOpenBtnStyle, {
-          padding: '5px 5px 5px 0px',
+          padding: '5px 8px 5px 8px',
           top: '75px',
-          left: '18px',
+          left: '10px',
           zIndex: '10000',
         });
         doc.body.appendChild(oUIOpenBtn);
