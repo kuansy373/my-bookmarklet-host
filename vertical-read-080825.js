@@ -4059,28 +4059,21 @@
                   jsonWin.alert(result.error);
                   isAllEditing = true;
                   allJsonEditBtn.textContent = '編集中…';
-                  jsonDisplay.contentEditable = 'true';
+                  jsonDisplay.readOnly = false;
+                  jsonDisplay.classList.add('editing');
                   [prettyCheckbox, jsonWinCopyBtn, compressJsonBtn].forEach(el => {
                     el.disabled = true;
                     el.classList.add('disabled');
                   });
                   prettyLabel.classList.add('disabled');
-                  return;
+                } else {
+                  currentJson = result.data;
+                  const currentText = JSON.stringify(currentJson);
+                  const compressed = extractBase(currentJson);
+                  const compressedText = JSON.stringify(compressed);
+                  compressJsonBtn.textContent = compressedText.length < currentText.length ? '短縮する' : '展開する';
                 }
-
-                currentJson = result.data;
-
-                // 編集終了時に短縮できるなら「短縮する」に切り替え
-                const currentText = JSON.stringify(currentJson);
-                const compressed = extractBase(currentJson);
-                const compressedText = JSON.stringify(compressed);
-
-                compressJsonBtn.textContent =
-                  compressedText.length < currentText.length
-                    ? '短縮する'
-                    : '展開する';
               }
-            });
 
             currentJson = extractBase(currentJson);
             updateCompressBtn();
