@@ -986,7 +986,6 @@
             bottom: '-108vh',
             zIndex: '9999',
             width: '80px',
-            opacity: '1',
             [position]: '30px',
             ...additionalStyle,
           });
@@ -3372,7 +3371,7 @@
             preview.readOnly = true;
             preview.style.cssText = `
               width: 100%;
-              min-height: 230px;
+              min-height: 250px;
               padding: 12px;
               border: 1px solid currentColor;
               border-radius: 4px;
