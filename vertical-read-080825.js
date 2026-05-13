@@ -4074,6 +4074,7 @@
                   compressJsonBtn.textContent = compressedText.length < currentText.length ? '短縮する' : '展開する';
                 }
               }
+            });
 
             currentJson = extractBase(currentJson);
             updateCompressBtn();
