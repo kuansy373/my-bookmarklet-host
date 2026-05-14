@@ -4053,7 +4053,16 @@
               prettyLabel.classList.toggle('disabled', isAllEditing);
 
               if (!isAllEditing) {
-                const result = validateAndParseJSON(jsonDisplay.value);
+                const expandedText = (() => {
+                  try {
+                    const raw = JSON.parse(jsonDisplay.value);
+                    return JSON.stringify(expandBase(raw));
+                  } catch {
+                    return jsonDisplay.value; // パース失敗時はそのまま渡してエラーを出させる
+                  }
+                })();
+
+                const result = validateAndParseJSON(expandedText);
                 if (result.error) {
                   jsonWin.alert(result.error);
                   isAllEditing = true;
