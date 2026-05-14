@@ -3392,7 +3392,7 @@
               if (prettyCheckbox.checked) {
                 preview.value = jsonTextFormatted;
                 preview.style.whiteSpace = 'pre-wrap';
-                preview.style.minHeight = '230px';
+                preview.style.minHeight = '250px';
                 preview.style.overflowY = 'auto';
               } else {
                 preview.value = jsonTextCompressed;
